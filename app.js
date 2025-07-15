@@ -1,6 +1,7 @@
 // Import required modules
 import { parsePDF, groupByProduct, groupByCategory, filterByDateRange, filterByCustomer, filterByProduct, filterByCategory } from './lib/pdf-parser.js';
 import { exportToExcel } from './lib/excel-export.js';
+import { initializeLookup } from './lib/category-lookup.js';
 
 // Global variables
 let uploadedFiles = [];
@@ -861,4 +862,24 @@ function downloadCSV(csv, filename) {
         link.click();
         document.body.removeChild(link);
     }
-} 
+}
+
+// Initialize the application
+async function initializeApp() {
+    try {
+        console.log('Initializing ZapSlip...');
+        
+        // Load category lookup data from Google Sheets
+        showToast('Loading latest product categories...', 'info');
+        await initializeLookup();
+        showToast('Product categories loaded successfully!', 'success');
+        
+        console.log('ZapSlip initialized successfully');
+    } catch (error) {
+        console.error('Error initializing app:', error);
+        showToast('Using offline product categories (Google Sheets unavailable)', 'warning');
+    }
+}
+
+// Start the app when DOM is loaded
+document.addEventListener('DOMContentLoaded', initializeApp); 

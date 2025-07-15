@@ -9,6 +9,121 @@ export interface ProductInfo {
   originalName?: string; // Original product name before normalization
 }
 
+// Google Sheets CSV URL for the lookup table
+const GOOGLE_SHEETS_CSV_URL = 'https://docs.google.com/spreadsheets/d/1WpQGDlmLcBbfIsk9Yehwr2snozVll1swa22eOBiMhnM/export?format=csv&gid=0';
+
+// Dynamic category lookup - will be populated from Google Sheets
+let DYNAMIC_CATEGORY_LOOKUP: Record<string, ProductInfo> = {};
+
+/**
+ * Fetches and parses CSV data from Google Sheets
+ * @returns Promise<Record<string, ProductInfo>> Parsed lookup object
+ */
+async function fetchGoogleSheetsLookup(): Promise<Record<string, ProductInfo>> {
+  try {
+    console.log('Fetching lookup data from Google Sheets...');
+    const response = await fetch(GOOGLE_SHEETS_CSV_URL);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const csvText = await response.text();
+    return parseCSVToLookup(csvText);
+  } catch (error) {
+    console.error('Error fetching Google Sheets data:', error);
+    return {};
+  }
+}
+
+/**
+ * Parses CSV text into lookup object
+ * @param csvText Raw CSV data
+ * @returns Parsed lookup object
+ */
+function parseCSVToLookup(csvText: string): Record<string, ProductInfo> {
+  const lookup: Record<string, ProductInfo> = {};
+  const lines = csvText.split('\n');
+  
+  // Skip header row
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    
+    // Parse CSV line (handle quoted values)
+    const columns = parseCSVLine(line);
+    
+    if (columns.length >= 3) {
+      const [title, sheet, type, status] = columns;
+      
+      // Only include active products (default to active if no status column)
+      if (!status || status.toLowerCase() === 'active') {
+        lookup[title] = {
+          sheet: sheet,
+          type: type || null
+        };
+      }
+    }
+  }
+  
+  console.log(`Loaded ${Object.keys(lookup).length} products from Google Sheets`);
+  return lookup;
+}
+
+/**
+ * Simple CSV line parser that handles quoted values
+ * @param line CSV line
+ * @returns Parsed columns
+ */
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  
+  result.push(current.trim());
+  return result;
+}
+
+/**
+ * Initializes the dynamic lookup by fetching from Google Sheets
+ * @returns Promise<void>
+ */
+export async function initializeLookup(): Promise<void> {
+  DYNAMIC_CATEGORY_LOOKUP = await fetchGoogleSheetsLookup();
+}
+
+/**
+ * Gets category info for a product, checking Google Sheets first, then fallback
+ * @param productName Product name to lookup
+ * @returns Category info or null if not found
+ */
+export function getCategoryInfo(productName: string): ProductInfo | null {
+  // First check dynamic lookup (Google Sheets)
+  if (DYNAMIC_CATEGORY_LOOKUP[productName]) {
+    return DYNAMIC_CATEGORY_LOOKUP[productName];
+  }
+  
+  // Fallback to static lookup
+  if (CATEGORY_LOOKUP[productName]) {
+    return CATEGORY_LOOKUP[productName];
+  }
+  
+  return null;
+}
+
 /**
  * Normalizes a product name by standardizing portion sizes and removing variations
  * @param name Product name to normalize
