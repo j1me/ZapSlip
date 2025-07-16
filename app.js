@@ -715,12 +715,20 @@ function groupByProductWithCustomers(orders) {
             
             productDetails[item.name].totalQty += item.qty;
             
-            // Add customer details
+            // Add customer details with region information
             const customerName = order.customer.name;
             if (!productDetails[item.name].customers[customerName]) {
-                productDetails[item.name].customers[customerName] = 0;
+                productDetails[item.name].customers[customerName] = {
+                    qty: 0,
+                    region: order.customer.region || 'Unknown'
+                };
             }
-            productDetails[item.name].customers[customerName] += item.qty;
+            productDetails[item.name].customers[customerName].qty += item.qty;
+            
+            // Update region if we have better information
+            if (order.customer.region && order.customer.region !== 'Unknown') {
+                productDetails[item.name].customers[customerName].region = order.customer.region;
+            }
         });
     });
     
@@ -759,10 +767,14 @@ function updateDetailedBreakdown(orders) {
         
         // Sort customers by quantity
         const sortedCustomers = Object.entries(details.customers)
-            .sort(([,a], [,b]) => b - a);
+            .sort(([,a], [,b]) => (b.qty || b) - (a.qty || a));
         
         const customerList = sortedCustomers
-            .map(([customer, qty]) => `${customer}: ${qty}`)
+            .map(([customer, data]) => {
+                const qty = data.qty || data;
+                const region = data.region || 'Unknown';
+                return `${customer}: ${qty} (${region})`;
+            })
             .join('<br>');
         
         detailsRow.innerHTML = `
@@ -790,25 +802,37 @@ function getDetailedBreakdownData(orders) {
     const productDetails = groupByProductWithCustomers(orders);
     const rows = [];
     
-    // Add headers
-    rows.push(['Product', 'Total Quantity', 'Customer Breakdown']);
+    // Add headers - separated customer name, quantity, and region columns
+    rows.push(['Product', 'Total Quantity', 'Customer Name', 'Customer Quantity', 'Region']);
     
     // Add data
     Object.entries(productDetails)
         .sort(([,a], [,b]) => b.totalQty - a.totalQty)
         .forEach(([product, details]) => {
-            // Add product row
-            rows.push([product, details.totalQty, '']);
+            // Get customer breakdown sorted by quantity
+            const customerEntries = Object.entries(details.customers)
+                .sort(([,a], [,b]) => (b.qty || b) - (a.qty || a));
             
-            // Add customer breakdown
-            Object.entries(details.customers)
-                .sort(([,a], [,b]) => b - a)
-                .forEach(([customer, qty]) => {
-                    rows.push(['', '', `${customer}: ${qty}`]);
+            // Add first customer row with product info
+            if (customerEntries.length > 0) {
+                const [firstCustomer, firstQtyAndRegion] = customerEntries[0];
+                const firstQty = firstQtyAndRegion.qty || firstQtyAndRegion;
+                const firstRegion = firstQtyAndRegion.region || 'Unknown';
+                rows.push([product, details.totalQty, firstCustomer, firstQty, firstRegion]);
+                
+                // Add remaining customers without repeating product info
+                customerEntries.slice(1).forEach(([customer, qtyAndRegion]) => {
+                    const qty = qtyAndRegion.qty || qtyAndRegion;
+                    const region = qtyAndRegion.region || 'Unknown';
+                    rows.push(['', '', customer, qty, region]);
                 });
+            } else {
+                // Handle case where product has no customers (shouldn't happen but safety)
+                rows.push([product, details.totalQty, '', '', '']);
+            }
             
-            // Add empty row for spacing
-            rows.push(['', '', '']);
+            // Add empty row for spacing between products
+            rows.push(['', '', '', '', '']);
         });
     
     return rows;

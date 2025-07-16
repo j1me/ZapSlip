@@ -13,6 +13,7 @@ export interface ParsedOrder {
   customer: {
     name: string;
     address: string;
+    region: string;
   };
   items: Array<{
     name: string;
@@ -102,7 +103,8 @@ export async function parsePDF(file: File): Promise<ParsedOrder> {
     orderDate: orderDateMatch?.[1] || 'Unknown',
     customer: {
       name: customerNameMatch?.[1] || 'Unknown',
-      address: addressMatch?.[1]?.replace(/\n/g, ', ') || 'Unknown'
+      address: addressMatch?.[1]?.replace(/\n/g, ', ') || 'Unknown',
+      region: 'Unknown' // TODO: Implement region extraction for TypeScript version
     },
     items,
     pdfBlobUrl,
